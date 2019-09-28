@@ -2,7 +2,7 @@ import sys, json
 
 from argparse import ArgumentParser
 from haikoo.haikoo import Haikoo
-from image_describer import ImageDescriber
+from haikoo.image_describer import ImageDescriber
 
 # load configuration options from config file
 try:

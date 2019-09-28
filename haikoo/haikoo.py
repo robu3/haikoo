@@ -5,9 +5,9 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 
-from image_describer import ImageDescriber
-from mock_image_describer import MockImageDescriber
-from haikoo_model_config import HaikooModelConfig
+from .image_describer import ImageDescriber
+from .mock_image_describer import MockImageDescriber
+from .haikoo_model_config import HaikooModelConfig
 
 class Haikoo:
 	VOWELS = ["a", "e", "i", "o", "u", "y"]

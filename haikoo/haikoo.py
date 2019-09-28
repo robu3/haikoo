@@ -8,6 +8,7 @@ from PIL import ImageDraw
 from .image_describer import ImageDescriber
 from .mock_image_describer import MockImageDescriber
 from .haikoo_model_config import HaikooModelConfig
+from . import __path__ as ROOT_PATH
 
 class Haikoo:
 	VOWELS = ["a", "e", "i", "o", "u", "y"]
@@ -16,17 +17,17 @@ class Haikoo:
 			"classic": HaikooModelConfig(["models/classic_haiku_model.json"], [1]),
 			"frost": HaikooModelConfig(["models/robert_frost_model.json"], [1]),
 			"shakespeare": HaikooModelConfig([
-				"models/shakespeare_sonnets.json",
-				"models/shakespeare_romeo_and_juliet.json",
-				"models/shakespeare_hamlet.json"
+				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
+				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
+				ROOT_PATH[0] + "/models/shakespeare_hamlet.json"
 				],
 				[1, 1, 1]),
 			"fusion": HaikooModelConfig([
-				"models/classic_haiku_model.json",
-				"models/robert_frost_model.json",
-				"models/shakespeare_sonnets.json",
-				"models/shakespeare_romeo_and_juliet.json",
-				"models/shakespeare_hamlet.json"
+				ROOT_PATH[0] + "/models/classic_haiku_model.json",
+				ROOT_PATH[0] + "/models/robert_frost_model.json",
+				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
+				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
+				ROOT_PATH[0] + "/models/shakespeare_hamlet.json"
 				],
 				[1, 1, 1, 1, 1])
 	}

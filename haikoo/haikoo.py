@@ -260,6 +260,8 @@ class Haikoo:
 	def create(self, file_path):
 		"""
 		Creates a new haiku from the specified image file.
+
+		:return: The text of the haiku.
 		"""
 		# get a text description of the image (list of words)
 		description = self.image_describer.describe_file(file_path)
@@ -284,7 +286,8 @@ class Haikoo:
 	def create_image_file(self, file_path, out_file_path, retry_count = 0):
 		"""
 		Creates a haiku of the specified image and then overlays the text on top.
-		Returns the full path of the new image file generated.
+
+		:return: The full path of the new image file generated.
 		"""
 		text = self.create(file_path)
 
@@ -333,7 +336,8 @@ class Haikoo:
 	def create_image_url(self, image_url, out_file_path, retry_count = 0):
 		"""
 		Creates a haiku of the specified image at the specified URL and then overlays the text on top.
-		Returns the full path of the new image file generated.
+
+		:return: The full path of the new image file generated.
 		"""
 		# download the file
 		url = urllib.parse.urlparse(image_url)
@@ -352,12 +356,26 @@ class Haikoo:
 		"""
 		Creates a haiku of the specified image and then overlays the text on top.
 		If the file path appears to be URL, the file will be downloaded.
-		Returns the full path of the new image file generated.
+
+		:return: The full path of the new image file generated.
 		"""
 		if re.match("http[s]+://", file_path):
 			self.create_image_url(file_path, out_file_path, retry_count)
 		else:
 			self.create_image_file(file_path, out_file_path, retry_count)
+
+		return os.path.abspath(out_file_path)
+
+	def create_thumbnail(self, image_path, out_file_path, x, y):
+		"""
+		Creates a thumbnail of the specified image.
+
+		:return: The full path of the thumbnail image generated.
+		"""
+
+		img = Image.open(image_path)
+		img.thumbnail((x, y))
+		img.save(out_file_path)
 
 		return os.path.abspath(out_file_path)
 

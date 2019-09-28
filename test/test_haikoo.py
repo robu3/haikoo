@@ -1,5 +1,6 @@
+import os
 import unittest
-from haikoo import Haikoo
+from haikoo.haikoo import Haikoo
 
 class HaikooTest(unittest.TestCase):
 
@@ -11,6 +12,10 @@ class HaikooTest(unittest.TestCase):
 			print(w)
 			self.assertEqual(w[1], haikoo.count_syllables(w[0]))
 
-if __name__ == "__main__":
-	unittest.main()
+	def test_create_thumbnail(self):
+		haikoo = Haikoo(None, None)
+		thumbnail_image = haikoo.create_thumbnail("./fixtures/image.jpeg", "thumbnail.jpeg", 128, 128)
+
+		self.assertTrue(os.path.exists(thumbnail_image))
+		os.remove(thumbnail_image)
 

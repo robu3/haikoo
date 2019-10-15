@@ -8,6 +8,7 @@ from PIL import ImageDraw
 from .image_describer import ImageDescriber
 from .mock_image_describer import MockImageDescriber
 from .haikoo_model_config import HaikooModelConfig
+from .haikoo_result import HaikooResult
 from . import __path__ as ROOT_PATH
 
 class Haikoo:
@@ -116,8 +117,6 @@ class Haikoo:
 
 		# count runs of consecutive vowels
 		# could use a regular expression for this
-		start = 0
-		end = 0
 		syllable_count = 0
 
 		in_vowels = False
@@ -258,11 +257,11 @@ class Haikoo:
 
 		return (lines, keywords)
 
-	def create(self, file_path):
+	def create_text(self, file_path):
 		"""
 		Creates a new haiku from the specified image file.
 
-		:return: The text of the haiku.
+		:return: Tuple containing (the text of the haiku, descriptive keywords used).
 		"""
 		# get a text description of the image (list of words)
 		description = self.image_describer.describe_file(file_path)
@@ -282,15 +281,15 @@ class Haikoo:
 		#print(f"keywords: {text[1]}")
 
 		haiku = "\n".join(text[0])
-		return self.format(haiku)
+		return (self.format(haiku), description)
 
-	def create_image_file(self, file_path, out_file_path, retry_count = 0):
+	def create_image_file(self, file_path, out_file_path, retry_count = 0, text = None):
 		"""
 		Creates a haiku of the specified image and then overlays the text on top.
-
-		:return: The full path of the new image file generated.
 		"""
-		text = self.create(file_path)
+		# generate haiku if not already provided
+		if text == None:
+			text = self.create_text(file_path)[0]
 
 		# size of the image (will be square-cropped)
 		size = 512
@@ -334,7 +333,30 @@ class Haikoo:
 		draw.text((textX, textY), text, (255, 255, 255), font=font)
 		img.save(out_file_path)
 
-	def create_image_url(self, image_url, out_file_path, retry_count = 0):
+	def create_image_file_error(self, out_file_path, text = None):
+		if text is None:
+			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
+
+		self.create_image_file(ROOT_PATH[0] + "/fixtures/bsod.png", out_file_path, text)
+
+	def download_image(self, image_url):
+		"""
+		Downloads an image.
+
+		:return: The full local path of the file downloaded.
+		"""
+		# download the file
+		url = urllib.parse.urlparse(image_url)
+		temp_file = "TEMP-" + os.path.basename(url.path)
+
+		req = urllib.request.Request(image_url)
+		with urllib.request.urlopen(req) as res:
+			with open(temp_file, "wb") as f:
+				shutil.copyfileobj(res, f)
+
+		return os.path.abspath(temp_file)
+
+	def create_image_url(self, image_url, out_file_path, retry_count = 0, text = None):
 		"""
 		Creates a haiku of the specified image at the specified URL and then overlays the text on top.
 
@@ -350,22 +372,44 @@ class Haikoo:
 				shutil.copyfileobj(res, f)
 
 		# create haiku and remove temp file
-		self.create_image_file(temp_file, out_file_path, retry_count)
+		self.create_image_file(temp_file, out_file_path, retry_count, text)
 		os.remove(temp_file)
 
-	def create_image(self, file_path, out_file_path, retry_count = 0):
+	def create_image(self, file_path, out_file_path, retry_count = 0, text = None):
 		"""
 		Creates a haiku of the specified image and then overlays the text on top.
 		If the file path appears to be URL, the file will be downloaded.
 
 		:return: The full path of the new image file generated.
 		"""
-		if re.match("http[s]+://", file_path):
-			self.create_image_url(file_path, out_file_path, retry_count)
-		else:
-			self.create_image_file(file_path, out_file_path, retry_count)
+		try:
+			is_url = False
 
-		return os.path.abspath(out_file_path)
+			# download the file if necessary
+			if re.match("http[s]+://", file_path):
+				file_path = self.download_image(file_path)
+				is_url = True
+
+			# generate haiku text
+			if text == None:
+				haiku = self.create_text(file_path)
+				text = haiku[0]
+				keywords = haiku[1]
+
+			# create image
+			self.create_image_file(file_path, out_file_path, retry_count, text)
+			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
+		except Exception as e:
+			# create error image
+			self.create_image_file_error(out_file_path)
+			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
+			result.error_message = str(e)
+		finally:
+			# cleanup downloaded file
+			if is_url and os.path.exists(file_path):
+				 os.remove(file_path)
+
+		return result
 
 	def create_thumbnail(self, image_path, out_file_path, x, y):
 		"""

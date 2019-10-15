@@ -1,6 +1,7 @@
 import os
 import unittest
 from haikoo.haikoo import Haikoo
+from haikoo.haikoo import MockImageDescriber
 
 class HaikooTest(unittest.TestCase):
 
@@ -12,9 +13,18 @@ class HaikooTest(unittest.TestCase):
 			print(w)
 			self.assertEqual(w[1], haikoo.count_syllables(w[0]))
 
+	def test_create_image(self):
+		describer = MockImageDescriber()
+		haikoo = Haikoo(describer, "fusion")
+		result = haikoo.create_image("./fixtures/image.jpeg", "./test/test_create_image.png")
+
+		print(result)
+		self.assertTrue(os.path.exists(result.image))
+		os.remove(result.image)
+
 	def test_create_thumbnail(self):
 		haikoo = Haikoo(None, None)
-		thumbnail_image = haikoo.create_thumbnail("./fixtures/image.jpeg", "thumbnail.jpeg", 128, 128)
+		thumbnail_image = haikoo.create_thumbnail("./fixtures/image.jpeg", "./test/thumbnail.jpeg", 128, 128)
 
 		self.assertTrue(os.path.exists(thumbnail_image))
 		os.remove(thumbnail_image)

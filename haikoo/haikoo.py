@@ -12,6 +12,9 @@ from .haikoo_result import HaikooResult
 from . import __path__ as ROOT_PATH
 
 class Haikoo:
+	"""
+	A haiku poem generator.
+	"""
 	VOWELS = ["a", "e", "i", "o", "u", "y"]
 	LINE_SYLLABLES = [5, 7, 5]
 	MODEL_CONFIGS = {
@@ -94,17 +97,6 @@ class Haikoo:
 				syllables[len(syllables) - 1] += word[start:end+1]
 
 		return syllables
-
-	def count_syllables_old(self, word):
-		"""
-		This method counts the syllables in a word.
-		"""
-		# remove silent e's at the end of a word
-		# (generally silent, at least)
-		if word[len(word) - 1] == "e":
-			word = word[:-1]
-
-		return len(self.split_syllables(word))
 
 	def count_syllables(self, word):
 		"""
@@ -380,7 +372,7 @@ class Haikoo:
 		Creates a haiku of the specified image and then overlays the text on top.
 		If the file path appears to be URL, the file will be downloaded.
 
-		:return: The full path of the new image file generated.
+		:return: A HaikooResult instance containing the haiku text, keywords used to generate it, and the generated image file ("haikoo").
 		"""
 		try:
 			is_url = False

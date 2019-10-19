@@ -20,6 +20,8 @@ class HaikooTest(unittest.TestCase):
 
 		print(result)
 		self.assertTrue(os.path.exists(result.image))
+		self.assertIsNotNone(result.text)
+		self.assertIsNotNone(result.keywords)
 		os.remove(result.image)
 
 	def test_create_thumbnail(self):

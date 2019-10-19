@@ -20,9 +20,10 @@ describer = ImageDescriber(config["cv_key"], config["cv_region"])
 parser = ArgumentParser(description="Generate haiku poems inspired by an image.")
 parser.add_argument("image", type=str, help="Path to the image to use as inspiration.")
 parser.add_argument("--model", type=str, default="fusion", help="Name of the Markov model to use. Valid options: classic, frost, shakespeare, fusion")
+parser.add_argument("--text", type=str, default=None, help="Haiku text to overlay on the image (optional, will be generated if not provided)")
 args = parser.parse_args()
 
 haikoo = Haikoo(describer, args.model)
-haiku = haikoo.create_image(args.image, "haikoo.png")
+haiku = haikoo.create_image(file_path=args.image, out_file_path="haikoo.png", text=args.text)
 
 print(haiku)

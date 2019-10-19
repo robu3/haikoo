@@ -1,6 +1,7 @@
 # project-specific
 config.json
 haikoo.png
+test/*.png
 
 # vim swap file
 *.swp

@@ -9,6 +9,8 @@ from .image_describer import ImageDescriber
 from .mock_image_describer import MockImageDescriber
 from .haikoo_model_config import HaikooModelConfig
 from .haikoo_result import HaikooResult
+from .haiku_text import HaikuText
+from .syllable_counter import SyllableCounter
 from . import __path__ as ROOT_PATH
 
 class Haikoo:
@@ -17,6 +19,7 @@ class Haikoo:
 	"""
 	VOWELS = ["a", "e", "i", "o", "u", "y"]
 	LINE_SYLLABLES = [5, 7, 5]
+	HAIKU_SYLLABLES = 17
 	MODEL_CONFIGS = {
 			"classic": HaikooModelConfig(["models/classic_haiku_model.json"], [1]),
 			"frost": HaikooModelConfig(["models/robert_frost_model.json"], [1]),
@@ -38,96 +41,10 @@ class Haikoo:
 
 	def __init__(self, image_describer, model, max_retries = 5, retry_score = 0.1):
 		self.image_describer = image_describer
+		self.syllable_counter = SyllableCounter() 
 		self.max_retries = max_retries
 		self.retry_score = retry_score
 		self.model = model
-
-	def split_syllables(self, word):
-		"""
-		This method splits a word into its constituent syllables (as best it can).
-		"""
-		start = 0
-		end = 0
-		is_start_vowel = False
-		is_vowel = False
-		is_prev_vowel = word[start] in self.VOWELS
-		syllables = []
-
-		# define a syllable as the transition from a consonant to a vowel(s) to a consonant
-		# basically, a consonant sandwich with vowels in the middle
-		# OR
-		# a transition from a vowel to consonant(s) to a vowel
-		# but exclude the ending vowel
-		while end < len(word):
-			is_start_vowel = word[start] in self.VOWELS
-			is_vowel = word[end] in self.VOWELS
-
-			#if start == 0:
-				#is_prev_vowel = is_start_vowel
-
-			# syllable starting with a consonant
-			if not is_start_vowel:
-				# C-V-C
-				if is_prev_vowel and not is_vowel:
-					# add the syllable
-					# and start scanning for the next
-					syllables.append(word[start:end+1])
-					start = end + 1
-					end = start
-			else:
-				# syllable starting with a vowel
-				# V-C-V
-				if not is_prev_vowel and is_vowel:
-					# rollback one letter
-					# then add the syllable
-					end = end - 1
-					syllables.append(word[start:end+1])
-					start = end + 1
-					end = start
-
-			# track previous letter
-			is_prev_vowel = is_vowel
-			end += 1
-
-		# remainder letters
-		if end == len(word) and start < end:
-			if end - start > 1 or len(syllables) == 0:
-				syllables.append(word[start:end+1])
-			else:
-				syllables[len(syllables) - 1] += word[start:end+1]
-
-		return syllables
-
-	def count_syllables(self, word):
-		"""
-		This method counts the syllables in a word.
-		"""
-		# remove silent e's at the end of a word
-		# (generally silent, at least)
-		if word[len(word) - 1] == "e":
-			word = word[:-1]
-
-		# count runs of consecutive vowels
-		# could use a regular expression for this
-		syllable_count = 0
-
-		in_vowels = False
-
-		for i in range(len(word)):
-			is_vowel = word[i] in self.VOWELS
-
-			if is_vowel:
-				if not in_vowels:
-					syllable_count += 1
-				in_vowels = True
-			else:
-				in_vowels = False
-
-		# no word has zero syllables
-		if syllable_count == 0:
-			syllable_count = 1
-
-		return syllable_count
 
 	def trim_line(self, line, line_number):
 		"""
@@ -148,7 +65,7 @@ class Haikoo:
 		count = 0
 
 		for w in words:
-			count += self.count_syllables(w)
+			count += self.syllable_counter.count(w)
 
 			trimmed += w
 
@@ -160,10 +77,13 @@ class Haikoo:
 		return (trimmed, count)
 
 	def format(self, haiku):
+		"""
+		Formats the haiku text.
+		"""
 		haiku = haiku.lower()
 		return haiku
 
-	def load_markov_model(self, model_name):
+	def load_markov_model(self, model_name, keywords):
 		"""
 		Loads our haiku Markov model.
 		"""
@@ -175,13 +95,56 @@ class Haikoo:
 			with open(m) as f:
 				json_text = f.read()
 
-			models.append(markovify.Text.from_json(json_text))
+			models.append(HaikuText.from_json(json_text))
 
 		# combine the models and return result
 		combined_model = markovify.combine(models, model_config.weights)
+		combined_model.keywords = keywords
 		return combined_model
 
 	def generate_text(self, description, markov_model, retry_count):
+		"""
+		Generates haiku text using the descriptive keywords and Markov model.
+		Returns an array of lines.
+		"""
+		lines = []
+		keywords = []
+		syllable_counts = [12, 5]
+		total_syllable_count = 0
+
+		for i in range(len(description)):
+			word = description[i]
+
+			markov_model.syllable_count = syllable_counts[len(lines)]
+			line = markov_model.make_sentence_with_start(word, test_output=False, strict=False)
+
+			if line != None:
+				lines.append(line)
+				total_syllable_count += markov_model.chain.num_syllables
+				keywords.append(word)
+
+			if len(lines) == 2:
+				break
+
+		print(keywords)
+		print(f"Total syllables {total_syllable_count}")
+
+		# retry if total syllable count is more than 2 off
+		if abs(total_syllable_count - self.HAIKU_SYLLABLES) > 2 and retry_count < self.max_retries:
+			return self.generate_text(description, markov_model, retry_count + 1)
+
+		# split 12 syllable line into 5-7
+		final_lines = list(self.syllable_counter.split_sentence(lines[0], 5))
+
+		# add a 切れ字-like punctionation (--) at the end of the second line
+		final_lines[1] += " --"
+
+		# then add the final line
+		final_lines.append(lines[1])
+
+		return (final_lines, keywords)
+
+	def generate_text_original(self, description, markov_model, retry_count):
 		"""
 		Generates haiku text using the descriptive keywords and Markov model.
 		Returns an array of lines.
@@ -194,6 +157,9 @@ class Haikoo:
 		for i in range(len(description)):
 			word = description[i]
 
+			line_number = len(lines)
+			markov_model.syllable_count = self.LINE_SYLLABLES[line_number]
+
 			try:
 				# attempt to create a line starting with the desired word
 				line = markov_model.make_sentence_with_start(word, test_output=False, strict=False)
@@ -205,7 +171,6 @@ class Haikoo:
 
 			if line != None:
 				# trim the line and add it to our haiku
-				line_number = len(lines)
 				trimmed = self.trim_line(line, line_number)
 
 				lines.append(trimmed[0])
@@ -249,6 +214,7 @@ class Haikoo:
 
 		return (lines, keywords)
 
+
 	def create_text(self, file_path):
 		"""
 		Creates a new haiku from the specified image file.
@@ -268,12 +234,12 @@ class Haikoo:
 			raise Exception("Description needs to include at least 3 words.")
 
 		# then generate a haiku line for each word
-		markov_model = self.load_markov_model(self.model)
+		markov_model = self.load_markov_model(self.model, description)
 		text = self.generate_text(description, markov_model, 0)
 		#print(f"keywords: {text[1]}")
 
 		haiku = "\n".join(text[0])
-		return (self.format(haiku), description)
+		return (self.format(haiku), text[1])
 
 	def create_image_file(self, file_path, out_file_path, retry_count = 0, text = None):
 		"""

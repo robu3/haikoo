@@ -10,6 +10,7 @@ from .mock_image_describer import MockImageDescriber
 from .haikoo_model_config import HaikooModelConfig
 from .haikoo_result import HaikooResult
 from .haiku_text import HaikuText
+from .haiku_chain import HaikuChain
 from .syllable_counter import SyllableCounter
 from . import __path__ as ROOT_PATH
 
@@ -22,7 +23,7 @@ class Haikoo:
 	HAIKU_SYLLABLES = 17
 	MODEL_CONFIGS = {
 			"classic": HaikooModelConfig(["models/classic_haiku_model.json"], [1]),
-			"frost": HaikooModelConfig(["models/robert_frost_model.json"], [1]),
+			"frost": HaikooModelConfig(["models/robert_frost.json"], [1]),
 			"shakespeare": HaikooModelConfig([
 				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
 				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
@@ -31,7 +32,7 @@ class Haikoo:
 				[1, 1, 1]),
 			"fusion": HaikooModelConfig([
 				ROOT_PATH[0] + "/models/classic_haiku_model.json",
-				ROOT_PATH[0] + "/models/robert_frost_model.json",
+				ROOT_PATH[0] + "/models/robert_frost.json",
 				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
 				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
 				ROOT_PATH[0] + "/models/shakespeare_hamlet.json"
@@ -98,9 +99,58 @@ class Haikoo:
 			models.append(HaikuText.from_json(json_text))
 
 		# combine the models and return result
-		combined_model = markovify.combine(models, model_config.weights)
+		combined_model = self.combine(models, model_config.weights)
 		combined_model.keywords = keywords
 		return combined_model
+
+	def combine(self, models, weights=None):
+		"""
+		Combine multiple Markov text models into a single on.
+		Modified version of implementation in markovify's utils.py
+		"""
+		if weights == None:
+			weights = [ 1 for _ in range(len(models)) ]
+
+		if len(models) != len(weights):
+			raise ValueError("`models` and `weights` lengths must be equal.")
+
+		model_dicts = list(map(markovify.utils.get_model_dict, models))
+		state_sizes = [ len(list(md.keys())[0])
+			for md in model_dicts ]
+
+		if len(set(state_sizes)) != 1:
+			raise ValueError("All `models` must have the same state size.")
+
+		if len(set(map(type, models))) != 1:
+			raise ValueError("All `models` must be of the same type.")
+
+		c = {}
+
+		for m, w in zip(model_dicts, weights):
+			for state, options in m.items():
+				current = c.get(state, {})
+				for subseq_k, subseq_v in options.items():
+					subseq_prev = current.get(subseq_k, [0, 0])
+					current[subseq_k] = [subseq_prev[0] + (subseq_v[0] * w), subseq_v[1]]
+				c[state] = current
+
+		ret_inst = models[0]
+
+		if isinstance(ret_inst, HaikuChain):
+			return HaikuChain.from_json(c)
+		if isinstance(ret_inst, HaikuText):
+			if any(m.retain_original for m in models):
+				combined_sentences = []
+				for m in models:
+					if m.retain_original:
+						combined_sentences += m.parsed_sentences
+				return ret_inst.from_chain(c, parsed_sentences=combined_sentences)
+			else:
+				return ret_inst.from_chain(c)
+		if isinstance(ret_inst, list):
+			return list(c.items())
+		if isinstance(ret_inst, dict):
+			return c
 
 	def generate_text(self, description, markov_model, retry_count):
 		"""
@@ -228,7 +278,7 @@ class Haikoo:
 		# cap descriptive words to most relevant
 		# description = description[0:(6 if len(description) >= 6 else len(description))]
 
-		shuffle(description)
+		#shuffle(description)
 
 		if len(description) < 3:
 			raise Exception("Description needs to include at least 3 words.")

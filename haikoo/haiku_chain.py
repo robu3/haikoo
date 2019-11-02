@@ -19,14 +19,15 @@ class HaikuChain(Chain):
 	"""
 	VOWELS = ["a", "e", "i", "o", "u", "y"]
 
-	def __init__(self, corpus, state_size, model, keywords = None):
-		# call parent class's constructor
-		super().__init__(corpus, state_size, model)
+	def __init__(self, corpus, state_size, model = None, keywords = None):
+		self.syllable_counter = SyllableCounter()
 		self.keywords = keywords
 		self.num_syllables = 0
 		self.syllable_count = 0
-		self.syllable_counter = SyllableCounter()
 		self.num_words = 0
+
+		# call parent class's constructor
+		super().__init__(corpus, state_size, model)
 
 	def reset(self):
 		self.num_syllables = 0
@@ -67,16 +68,11 @@ class HaikuChain(Chain):
 
 			for item in items:
 				# remove choices that would put us over the syllable count
-				# ignore the end tokens if possible
-				if item[0] == END:
-					cnt = 0
-				else:
-					cnt = self.syllable_counter.count(item[0])
-
-				syllable_item = (item[0], item[1], cnt)
+				# item: (word, [count, syllables])
+				syllable_item = (item[0], item[1][0], item[1][1])
 				all_choices.append(syllable_item)
 
-				if cnt > 0 and cnt <= (self.syllable_count - self.num_syllables):
+				if syllable_item[2] > 0 and syllable_item[2] <= (self.syllable_count - self.num_syllables):
 					syllable_choices.append(syllable_item)
 
 			# if no choices are under the syllable limit, oh well?
@@ -86,7 +82,6 @@ class HaikuChain(Chain):
 			choices, weights, syllables = zip(*syllable_choices)
 			cumdist = list(accumulate(weights))
 			print(syllable_choices)
-
 
 		r = random.random() * cumdist[-1]
 		pos = bisect.bisect(cumdist, r)
@@ -100,6 +95,50 @@ class HaikuChain(Chain):
 		self.num_words += 1
 
 		return selection
+
+	def build(self, corpus, state_size):
+		"""
+		Build a Python representation of the Markov model. Returns a dict
+		of dicts where the keys of the outer dict represent all possible states,
+		and point to the inner dicts. The inner dicts represent all possibilities
+		for the "next" item in the chain, along with the count of times it
+		appears.
+		"""
+
+		# Using a DefaultDict here would be a lot more convenient, however the memory
+		# usage is far higher.
+		model = {}
+
+		for run in corpus:
+			items = ([ BEGIN ] * state_size) + run + [ END ]
+			for i in range(len(run) + 1):
+				state = tuple(items[i:i+state_size])
+				follow = items[i+state_size]
+				if state not in model:
+					model[state] = {}
+
+				if follow not in model[state]:
+					# track both count/frequency and number of syllables in the word
+					model[state][follow] = [
+						0,
+						0 if (follow == BEGIN or follow == END) else self.syllable_counter.count(follow)
+						]
+
+				model[state][follow][0] += 1
+		return model
+
+	def precompute_begin_state(self):
+		"""
+		Caches the summation calculation and available choices for BEGIN * state_size.
+		Significantly speeds up chain generation on large corpuses. Thanks, @schollz!
+		"""
+		begin_state = tuple([ BEGIN ] * self.state_size)
+		choices, data = zip(*self.model[begin_state].items())
+		weights, _ = zip(*data)
+
+		cumdist = list(accumulate(weights))
+		self.begin_cumdist = cumdist
+		self.begin_choices = choices
 
 	@classmethod
 	def from_json(cls, json_thing, keywords = None):

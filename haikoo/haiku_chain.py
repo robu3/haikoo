@@ -4,6 +4,7 @@ from markovify.chain import BEGIN, END
 import bisect
 import random
 import json
+import logging
 from .syllable_counter import SyllableCounter
 
 # Python3 compatibility
@@ -25,6 +26,7 @@ class HaikuChain(Chain):
 		self.num_syllables = 0
 		self.syllable_count = 0
 		self.num_words = 0
+		self.logger = logging.getLogger("haikoo")
 
 		# call parent class's constructor
 		super().__init__(corpus, state_size, model)
@@ -45,6 +47,8 @@ class HaikuChain(Chain):
 		Given a state, choose the next item.
 		Weight heavily words in our keyword list.
 		"""
+
+		self.logger.debug(f"Chain move: {state}")
 
 		# reached syllable count
 		if self.num_syllables >= self.syllable_count:

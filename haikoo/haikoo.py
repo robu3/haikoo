@@ -9,6 +9,9 @@ from .image_describer import ImageDescriber
 from .mock_image_describer import MockImageDescriber
 from .haikoo_model_config import HaikooModelConfig
 from .haikoo_result import HaikooResult
+from .haiku_text import HaikuText
+from .haiku_chain import HaikuChain
+from .syllable_counter import SyllableCounter
 from . import __path__ as ROOT_PATH
 
 class Haikoo:
@@ -17,9 +20,10 @@ class Haikoo:
 	"""
 	VOWELS = ["a", "e", "i", "o", "u", "y"]
 	LINE_SYLLABLES = [5, 7, 5]
+	HAIKU_SYLLABLES = 17
 	MODEL_CONFIGS = {
 			"classic": HaikooModelConfig(["models/classic_haiku_model.json"], [1]),
-			"frost": HaikooModelConfig(["models/robert_frost_model.json"], [1]),
+			"frost": HaikooModelConfig(["models/robert_frost.json"], [1]),
 			"shakespeare": HaikooModelConfig([
 				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
 				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
@@ -28,7 +32,7 @@ class Haikoo:
 				[1, 1, 1]),
 			"fusion": HaikooModelConfig([
 				ROOT_PATH[0] + "/models/classic_haiku_model.json",
-				ROOT_PATH[0] + "/models/robert_frost_model.json",
+				ROOT_PATH[0] + "/models/robert_frost.json",
 				ROOT_PATH[0] + "/models/shakespeare_sonnets.json",
 				ROOT_PATH[0] + "/models/shakespeare_romeo_and_juliet.json",
 				ROOT_PATH[0] + "/models/shakespeare_hamlet.json"
@@ -38,96 +42,10 @@ class Haikoo:
 
 	def __init__(self, image_describer, model, max_retries = 5, retry_score = 0.1):
 		self.image_describer = image_describer
+		self.syllable_counter = SyllableCounter() 
 		self.max_retries = max_retries
 		self.retry_score = retry_score
 		self.model = model
-
-	def split_syllables(self, word):
-		"""
-		This method splits a word into its constituent syllables (as best it can).
-		"""
-		start = 0
-		end = 0
-		is_start_vowel = False
-		is_vowel = False
-		is_prev_vowel = word[start] in self.VOWELS
-		syllables = []
-
-		# define a syllable as the transition from a consonant to a vowel(s) to a consonant
-		# basically, a consonant sandwich with vowels in the middle
-		# OR
-		# a transition from a vowel to consonant(s) to a vowel
-		# but exclude the ending vowel
-		while end < len(word):
-			is_start_vowel = word[start] in self.VOWELS
-			is_vowel = word[end] in self.VOWELS
-
-			#if start == 0:
-				#is_prev_vowel = is_start_vowel
-
-			# syllable starting with a consonant
-			if not is_start_vowel:
-				# C-V-C
-				if is_prev_vowel and not is_vowel:
-					# add the syllable
-					# and start scanning for the next
-					syllables.append(word[start:end+1])
-					start = end + 1
-					end = start
-			else:
-				# syllable starting with a vowel
-				# V-C-V
-				if not is_prev_vowel and is_vowel:
-					# rollback one letter
-					# then add the syllable
-					end = end - 1
-					syllables.append(word[start:end+1])
-					start = end + 1
-					end = start
-
-			# track previous letter
-			is_prev_vowel = is_vowel
-			end += 1
-
-		# remainder letters
-		if end == len(word) and start < end:
-			if end - start > 1 or len(syllables) == 0:
-				syllables.append(word[start:end+1])
-			else:
-				syllables[len(syllables) - 1] += word[start:end+1]
-
-		return syllables
-
-	def count_syllables(self, word):
-		"""
-		This method counts the syllables in a word.
-		"""
-		# remove silent e's at the end of a word
-		# (generally silent, at least)
-		if word[len(word) - 1] == "e":
-			word = word[:-1]
-
-		# count runs of consecutive vowels
-		# could use a regular expression for this
-		syllable_count = 0
-
-		in_vowels = False
-
-		for i in range(len(word)):
-			is_vowel = word[i] in self.VOWELS
-
-			if is_vowel:
-				if not in_vowels:
-					syllable_count += 1
-				in_vowels = True
-			else:
-				in_vowels = False
-
-		# no word has zero syllables
-		if syllable_count == 0:
-			syllable_count = 1
-
-		return syllable_count
 
 	def trim_line(self, line, line_number):
 		"""
@@ -148,7 +66,7 @@ class Haikoo:
 		count = 0
 
 		for w in words:
-			count += self.count_syllables(w)
+			count += self.syllable_counter.count(w)
 
 			trimmed += w
 
@@ -160,10 +78,13 @@ class Haikoo:
 		return (trimmed, count)
 
 	def format(self, haiku):
+		"""
+		Formats the haiku text.
+		"""
 		haiku = haiku.lower()
 		return haiku
 
-	def load_markov_model(self, model_name):
+	def load_markov_model(self, model_name, keywords):
 		"""
 		Loads our haiku Markov model.
 		"""
@@ -175,11 +96,61 @@ class Haikoo:
 			with open(m) as f:
 				json_text = f.read()
 
-			models.append(markovify.Text.from_json(json_text))
+			models.append(HaikuText.from_json(json_text))
 
 		# combine the models and return result
-		combined_model = markovify.combine(models, model_config.weights)
+		combined_model = self.combine(models, model_config.weights)
+		combined_model.keywords = keywords
 		return combined_model
+
+	def combine(self, models, weights=None):
+		"""
+		Combine multiple Markov text models into a single on.
+		Modified version of implementation in markovify's utils.py
+		"""
+		if weights == None:
+			weights = [ 1 for _ in range(len(models)) ]
+
+		if len(models) != len(weights):
+			raise ValueError("`models` and `weights` lengths must be equal.")
+
+		model_dicts = list(map(markovify.utils.get_model_dict, models))
+		state_sizes = [ len(list(md.keys())[0])
+			for md in model_dicts ]
+
+		if len(set(state_sizes)) != 1:
+			raise ValueError("All `models` must have the same state size.")
+
+		if len(set(map(type, models))) != 1:
+			raise ValueError("All `models` must be of the same type.")
+
+		c = {}
+
+		for m, w in zip(model_dicts, weights):
+			for state, options in m.items():
+				current = c.get(state, {})
+				for subseq_k, subseq_v in options.items():
+					subseq_prev = current.get(subseq_k, [0, 0])
+					current[subseq_k] = [subseq_prev[0] + (subseq_v[0] * w), subseq_v[1]]
+				c[state] = current
+
+		ret_inst = models[0]
+
+		if isinstance(ret_inst, HaikuChain):
+			return HaikuChain.from_json(c)
+		if isinstance(ret_inst, HaikuText):
+			if any(m.retain_original for m in models):
+				combined_sentences = []
+				for m in models:
+					if m.retain_original:
+						combined_sentences += m.parsed_sentences
+				return ret_inst.from_chain(c, parsed_sentences=combined_sentences)
+			else:
+				return ret_inst.from_chain(c)
+		if isinstance(ret_inst, list):
+			return list(c.items())
+		if isinstance(ret_inst, dict):
+			return c
 
 	def generate_text(self, description, markov_model, retry_count):
 		"""
@@ -188,66 +159,41 @@ class Haikoo:
 		"""
 		lines = []
 		keywords = []
-		syllables = []
-		final_score = 0
+		syllable_counts = [12, 5]
+		total_syllable_count = 0
 
 		for i in range(len(description)):
 			word = description[i]
 
-			try:
-				# attempt to create a line starting with the desired word
-				line = markov_model.make_sentence_with_start(word, test_output=False, strict=False)
-				#line = markov_model.make_sentence(test_output=True)
-			except:
-				# handle exceptions; generate a sentence that simply contains the word
-				line = markov_model.make_sentence(test_output=True)
-				pass
+			markov_model.syllable_count = syllable_counts[len(lines)]
+			line = markov_model.make_sentence_with_start(word, test_output=False, strict=False)
 
 			if line != None:
-				# trim the line and add it to our haiku
-				line_number = len(lines)
-				trimmed = self.trim_line(line, line_number)
-
-				lines.append(trimmed[0])
+				lines.append(line)
+				total_syllable_count += markov_model.chain.num_syllables
 				keywords.append(word)
 
-				# score is difference in syllables
-				# lower is better (0 == perfect)
-				score = abs(trimmed[1] - self.LINE_SYLLABLES[line_number]) / self.LINE_SYLLABLES[line_number]
-				final_score += score
-				syllables.append(trimmed[1])
-
-			if len(lines) == 3:
+			if len(lines) == 2:
 				break
 
-		# add random lines if ones based on keywords were not enough
-		while len(lines) < 3:
-			line = markov_model.make_sentence(test_output=True)
-			# trim the line and add it to our haiku
-			line_number = len(lines)
-			trimmed = self.trim_line(line, line_number)
+		#print(keywords)
+		#print(f"Total syllables {total_syllable_count}")
 
-			lines.append(trimmed[0])
-			keywords.append(None)
-
-			# score is % difference in syllables
-			# lower is better (0 == perfect)
-			score = abs(trimmed[1] - self.LINE_SYLLABLES[line_number]) / self.LINE_SYLLABLES[line_number]
-			final_score += score
-			syllables.append(trimmed[1])
-
-
-		# retry if the syllable count is too far off
-		final_score /= 3
-
-		if final_score > self.retry_score and retry_count < self.max_retries:
+		# retry if total syllable count is more than 2 off
+		if abs(total_syllable_count - self.HAIKU_SYLLABLES) > 2 and retry_count < self.max_retries:
 			return self.generate_text(description, markov_model, retry_count + 1)
 
-		print(syllables)
-		print(final_score)
-		print(keywords)
+		# split 12 syllable line into 5-7
+		final_lines = list(self.syllable_counter.split_sentence(lines[0], 5))
 
-		return (lines, keywords)
+		# add a 切れ字-like punctionation (--) at the end of the second line
+		final_lines[1] += " --"
+
+		# remove punctuation from final line
+		# and add it
+		final_lines.append(self.syllable_counter.remove_punctuation(lines[1]))
+
+		return (final_lines, keywords)
 
 	def create_text(self, file_path):
 		"""
@@ -257,23 +203,20 @@ class Haikoo:
 		"""
 		# get a text description of the image (list of words)
 		description = self.image_describer.describe_file(file_path)
-		#print(f"description: {description}")
 
 		# cap descriptive words to most relevant
-		# description = description[0:(6 if len(description) >= 6 else len(description))]
-
-		shuffle(description)
+		#description = description[0:(6 if len(description) >= 6 else len(description))]
+		#shuffle(description)
 
 		if len(description) < 3:
 			raise Exception("Description needs to include at least 3 words.")
 
 		# then generate a haiku line for each word
-		markov_model = self.load_markov_model(self.model)
+		markov_model = self.load_markov_model(self.model, description)
 		text = self.generate_text(description, markov_model, 0)
-		#print(f"keywords: {text[1]}")
 
 		haiku = "\n".join(text[0])
-		return (self.format(haiku), description)
+		return (self.format(haiku), text[1])
 
 	def create_image_file(self, file_path, out_file_path, retry_count = 0, text = None):
 		"""
@@ -325,11 +268,8 @@ class Haikoo:
 		draw.text((textX, textY), text, (255, 255, 255), font=font)
 		img.save(out_file_path)
 
-	def create_image_file_error(self, out_file_path, text = None):
-		if text is None:
-			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
-
-		self.create_image_file(ROOT_PATH[0] + "/fixtures/bsod.png", out_file_path, text)
+	def create_image_file_error(self, out_file_path, text):
+		self.create_image_file(ROOT_PATH[0] + "/images/bsod.png", out_file_path, 0, text)
 
 	def download_image(self, image_url):
 		"""
@@ -393,8 +333,9 @@ class Haikoo:
 			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
 		except Exception as e:
 			# create error image
-			self.create_image_file_error(out_file_path)
-			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
+			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
+			self.create_image_file_error(out_file_path, text)
+			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=None) 
 			result.error_message = str(e)
 		finally:
 			# cleanup downloaded file

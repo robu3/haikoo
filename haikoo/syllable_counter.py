@@ -96,7 +96,6 @@ class SyllableCounter:
     def remove_punctuation(self, str):
         return re.sub(r'[\.\?!,/]+', "", str)
 
-
     def split_sentence(self, sentence, syllable_count):
         """
         Splits the sentence into two at the specified number of syllables.

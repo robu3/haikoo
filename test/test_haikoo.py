@@ -31,7 +31,6 @@ class HaikooTest(unittest.TestCase):
 		# punctuation/special characters should be removed (when not part of a word)
 		self.assertEqual("over the lazy dog", halves[1])
 
-		# 
 		sentence = "Torches are made to light, jewels to wear, Dainties to taste, fresh beauty for the use"
 		halves = counter.split_sentence(sentence, 7)
 
@@ -56,6 +55,14 @@ class HaikooTest(unittest.TestCase):
 		self.assertIsNotNone(result.text)
 		self.assertIsNotNone(result.keywords)
 		os.remove(result.image)
+
+	def test_create_image_error(self):
+		describer = MockImageDescriber()
+		haikoo = Haikoo(describer, "fusion")
+		result = haikoo.create_image("./fixtures/does_not_exist.jpeg", "./test/test_create_image.png")
+
+		print(result)
+		self.assertIsNotNone(result.error_message)
 
 	def test_create_thumbnail(self):
 		haikoo = Haikoo(None, None)

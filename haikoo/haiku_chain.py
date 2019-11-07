@@ -45,9 +45,6 @@ class HaikuChain(Chain):
 		Given a state, choose the next item.
 		Weight heavily words in our keyword list.
 		"""
-		print(f"MOVE: {self.num_syllables} / {self.syllable_count}")
-		print(state)
-		#print(f"MOVE: {self.model[state].items()}")
 
 		# reached syllable count
 		if self.num_syllables >= self.syllable_count:
@@ -81,7 +78,6 @@ class HaikuChain(Chain):
 
 			choices, weights, syllables = zip(*syllable_choices)
 			cumdist = list(accumulate(weights))
-			print(syllable_choices)
 
 		r = random.random() * cumdist[-1]
 		pos = bisect.bisect(cumdist, r)

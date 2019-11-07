@@ -176,8 +176,8 @@ class Haikoo:
 			if len(lines) == 2:
 				break
 
-		print(keywords)
-		print(f"Total syllables {total_syllable_count}")
+		#print(keywords)
+		#print(f"Total syllables {total_syllable_count}")
 
 		# retry if total syllable count is more than 2 off
 		if abs(total_syllable_count - self.HAIKU_SYLLABLES) > 2 and retry_count < self.max_retries:
@@ -189,81 +189,11 @@ class Haikoo:
 		# add a 切れ字-like punctionation (--) at the end of the second line
 		final_lines[1] += " --"
 
-		# then add the final line
-		final_lines.append(lines[1])
+		# remove punctuation from final line
+		# and add it
+		final_lines.append(self.syllable_counter.remove_punctuation(lines[1]))
 
 		return (final_lines, keywords)
-
-	def generate_text_original(self, description, markov_model, retry_count):
-		"""
-		Generates haiku text using the descriptive keywords and Markov model.
-		Returns an array of lines.
-		"""
-		lines = []
-		keywords = []
-		syllables = []
-		final_score = 0
-
-		for i in range(len(description)):
-			word = description[i]
-
-			line_number = len(lines)
-			markov_model.syllable_count = self.LINE_SYLLABLES[line_number]
-
-			try:
-				# attempt to create a line starting with the desired word
-				line = markov_model.make_sentence_with_start(word, test_output=False, strict=False)
-				#line = markov_model.make_sentence(test_output=True)
-			except:
-				# handle exceptions; generate a sentence that simply contains the word
-				line = markov_model.make_sentence(test_output=True)
-				pass
-
-			if line != None:
-				# trim the line and add it to our haiku
-				trimmed = self.trim_line(line, line_number)
-
-				lines.append(trimmed[0])
-				keywords.append(word)
-
-				# score is difference in syllables
-				# lower is better (0 == perfect)
-				score = abs(trimmed[1] - self.LINE_SYLLABLES[line_number]) / self.LINE_SYLLABLES[line_number]
-				final_score += score
-				syllables.append(trimmed[1])
-
-			if len(lines) == 3:
-				break
-
-		# add random lines if ones based on keywords were not enough
-		while len(lines) < 3:
-			line = markov_model.make_sentence(test_output=True)
-			# trim the line and add it to our haiku
-			line_number = len(lines)
-			trimmed = self.trim_line(line, line_number)
-
-			lines.append(trimmed[0])
-			keywords.append(None)
-
-			# score is % difference in syllables
-			# lower is better (0 == perfect)
-			score = abs(trimmed[1] - self.LINE_SYLLABLES[line_number]) / self.LINE_SYLLABLES[line_number]
-			final_score += score
-			syllables.append(trimmed[1])
-
-
-		# retry if the syllable count is too far off
-		final_score /= 3
-
-		if final_score > self.retry_score and retry_count < self.max_retries:
-			return self.generate_text(description, markov_model, retry_count + 1)
-
-		print(syllables)
-		print(final_score)
-		print(keywords)
-
-		return (lines, keywords)
-
 
 	def create_text(self, file_path):
 		"""
@@ -273,11 +203,9 @@ class Haikoo:
 		"""
 		# get a text description of the image (list of words)
 		description = self.image_describer.describe_file(file_path)
-		#print(f"description: {description}")
 
 		# cap descriptive words to most relevant
-		# description = description[0:(6 if len(description) >= 6 else len(description))]
-
+		#description = description[0:(6 if len(description) >= 6 else len(description))]
 		#shuffle(description)
 
 		if len(description) < 3:
@@ -286,7 +214,6 @@ class Haikoo:
 		# then generate a haiku line for each word
 		markov_model = self.load_markov_model(self.model, description)
 		text = self.generate_text(description, markov_model, 0)
-		#print(f"keywords: {text[1]}")
 
 		haiku = "\n".join(text[0])
 		return (self.format(haiku), text[1])
@@ -341,11 +268,8 @@ class Haikoo:
 		draw.text((textX, textY), text, (255, 255, 255), font=font)
 		img.save(out_file_path)
 
-	def create_image_file_error(self, out_file_path, text = None):
-		if text is None:
-			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
-
-		self.create_image_file(ROOT_PATH[0] + "/fixtures/bsod.png", out_file_path, text)
+	def create_image_file_error(self, out_file_path, text):
+		self.create_image_file(ROOT_PATH[0] + "/images/bsod.png", out_file_path, 0, text)
 
 	def download_image(self, image_url):
 		"""
@@ -409,8 +333,9 @@ class Haikoo:
 			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
 		except Exception as e:
 			# create error image
-			self.create_image_file_error(out_file_path)
-			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
+			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
+			self.create_image_file_error(out_file_path, text)
+			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=None) 
 			result.error_message = str(e)
 		finally:
 			# cleanup downloaded file

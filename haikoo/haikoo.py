@@ -1,4 +1,5 @@
 import sys, os, re, urllib.request, shutil
+import logging, logging.handlers
 import markovify
 from random import shuffle
 from PIL import Image
@@ -18,8 +19,6 @@ class Haikoo:
 	"""
 	A haiku poem generator.
 	"""
-	VOWELS = ["a", "e", "i", "o", "u", "y"]
-	LINE_SYLLABLES = [5, 7, 5]
 	HAIKU_SYLLABLES = 17
 	MODEL_CONFIGS = {
 			"classic": HaikooModelConfig(["models/classic_haiku_model.json"], [1]),
@@ -40,42 +39,22 @@ class Haikoo:
 				[1, 1, 1, 1, 1])
 	}
 
-	def __init__(self, image_describer, model, max_retries = 5, retry_score = 0.1):
+	def __init__(self, image_describer, model, max_retries = 5, retry_score = 0.1, log_level = logging.WARNING):
 		self.image_describer = image_describer
 		self.syllable_counter = SyllableCounter() 
 		self.max_retries = max_retries
 		self.retry_score = retry_score
 		self.model = model
+		self.logger = logging.getLogger("haikoo")
 
-	def trim_line(self, line, line_number):
-		"""
-		Trims the specified line to the correct number of syllables per its line number.
-		Returns a tuple of (trimmed_line, syllable_count)
-		"""
-		if line_number > len(self.LINE_SYLLABLES) or line_number < 0:
-			raise Exception("Invalid line number: " + line_number)
+		# setup logging
+		streamHandler = logging.StreamHandler(sys.stdout)
+		fileHandler = logging.handlers.RotatingFileHandler("haikoo.log", maxBytes=32000, backupCount=10)
+		fileHandler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s:%(name)s:\t%(message)s"))
 
-		# remove punctation
-		line = re.sub(r"[\.!,]", "", line)
-
-		# iterate over each word
-		# build a new line and cut it once we've met or exceeded the syllable count
-		words = line.split(" ")
-		trimmed = ""
-		max_count = self.LINE_SYLLABLES[line_number]
-		count = 0
-
-		for w in words:
-			count += self.syllable_counter.count(w)
-
-			trimmed += w
-
-			if count >= max_count:
-				break
-			else:
-				trimmed += " "
-
-		return (trimmed, count)
+		self.logger.addHandler(streamHandler)
+		self.logger.addHandler(fileHandler)
+		self.logger.setLevel(log_level)
 
 	def format(self, haiku):
 		"""
@@ -162,6 +141,9 @@ class Haikoo:
 		syllable_counts = [12, 5]
 		total_syllable_count = 0
 
+		# generate a 12 syllable line that will be split into two lines (5 and 7 syllables) and 5-syllable line
+		# this improves the intelligibility of the first two lines, helping the haiku "flow" better
+		# the last line will be independent from the first two
 		for i in range(len(description)):
 			word = description[i]
 
@@ -176,11 +158,12 @@ class Haikoo:
 			if len(lines) == 2:
 				break
 
-		#print(keywords)
-		#print(f"Total syllables {total_syllable_count}")
+		self.logger.debug(f"Keywords: {keywords}")
+		self.logger.debug(f"Total syllables: {total_syllable_count}")
 
 		# retry if total syllable count is more than 2 off
 		if abs(total_syllable_count - self.HAIKU_SYLLABLES) > 2 and retry_count < self.max_retries:
+			self.logger.debug("Retry haiku generation.")
 			return self.generate_text(description, markov_model, retry_count + 1)
 
 		# split 12 syllable line into 5-7
@@ -189,8 +172,7 @@ class Haikoo:
 		# add a 切れ字-like punctionation (--) at the end of the second line
 		final_lines[1] += " --"
 
-		# remove punctuation from final line
-		# and add it
+		# remove punctuation from final line and append
 		final_lines.append(self.syllable_counter.remove_punctuation(lines[1]))
 
 		return (final_lines, keywords)
@@ -332,6 +314,8 @@ class Haikoo:
 			self.create_image_file(file_path, out_file_path, retry_count, text)
 			result = HaikooResult(text=text, image=os.path.abspath(out_file_path), keywords=keywords) 
 		except Exception as e:
+			self.logger.error("Error generating haikoo image.", exc_info=True)
+
 			# create error image
 			text = "an error occurs\nas frustrated you may be\nmy heart weeps more so"
 			self.create_image_file_error(out_file_path, text)

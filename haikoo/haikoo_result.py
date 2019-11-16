@@ -1,6 +1,11 @@
 import json
 
 class HaikooResult:
+    """
+    The result of a haiku generation.
+    It contains the generated text, keywords identified and used, and the resulting image.
+    If any errors occurred during process, error_text will be set with the error message(s).
+    """
 
     def __init__(self, text, keywords, image):
         self.text = text

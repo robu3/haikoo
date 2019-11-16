@@ -8,7 +8,7 @@ class HaikooTest(unittest.TestCase):
 
 	def test_count_syllables_word(self):
 		counter = SyllableCounter()
-		words = [("food", 1), ("aardvark", 2), ("mountain", 2), ("above", 2), ("the", 1), ("consequence", 3)]
+		words = [("food", 1), ("aardvark", 2), ("mountain", 2), ("above", 2), ("the", 1), ("consequence", 3), ("Amagasaki", 5)]
 
 		for w in words:
 			print(w)

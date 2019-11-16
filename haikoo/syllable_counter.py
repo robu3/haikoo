@@ -4,7 +4,10 @@ class SyllableCounter:
     """
     A syllable counter.
     """
-    VOWELS = ["a", "e", "i", "o", "u", "y"]
+
+    # note that we are including "y" as a vowel here;
+    # not entirely accurate, but good enough (^_^)
+    VOWELS = ["a", "e", "i", "o", "u", "y", "A", "E", "I", "O", "U", "Y"]
 
     def count(self, word):
         """
@@ -39,7 +42,7 @@ class SyllableCounter:
 
     def split_syllables(self, word):
         """
-        DEPRECATED. No longer in use, will be removed in the future.
+        DEPRECATED. No longer in use, may be removed in the future.
 
         This method splits a word into its constituent syllables (as best it can).
         """

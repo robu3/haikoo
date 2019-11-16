@@ -1,6 +1,9 @@
 import requests
 
 class ImageDescriber:
+	"""
+	Describes an image by returning a list of words.
+	"""
 
 	def __init__(self, cv_key, cv_location="eastus"):
 		# public attributes
@@ -13,15 +16,15 @@ class ImageDescriber:
 	def _process_request(self, image_url, image_data):
 		# set HTTP headers
 		headers = dict()
-		headers["Ocp-Apim-Subscription-Key"] = self._cv_key;
-		headers["Content-Type"] = "application/octet-stream";
+		headers["Ocp-Apim-Subscription-Key"] = self._cv_key
+		headers["Content-Type"] = "application/octet-stream"
 
 		# use image URL in JSON body if provided
 		json = None
 
 		if image_url is not None:
 			json = { "url": image_url }
-			headers["Content-Type"] = "application/json";
+			headers["Content-Type"] = "application/json"
 
 		# add params
 		params = { "maxCandidates": 1, "language": "en" }
@@ -55,8 +58,12 @@ class ImageDescriber:
 
 		return result
 
-
 	def describe_file(self, image_file):
+		"""
+		Describes the specified file using Azure's Cognitive Services Computer Vision API.
+
+		:return: List of keywords describing the file.
+		"""
 		with open(image_file, "rb") as f:
 			data = f.read()
 

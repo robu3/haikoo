@@ -251,6 +251,9 @@ class Haikoo:
 		img.save(out_file_path)
 
 	def create_image_file_error(self, out_file_path, text):
+		"""
+		Creates an error image (based on the Windows "blue screen of death").
+		"""
 		self.create_image_file(ROOT_PATH[0] + "/images/bsod.png", out_file_path, 0, text)
 
 	def download_image(self, image_url):

@@ -39,6 +39,8 @@ class SyllableCounter:
 
     def split_syllables(self, word):
         """
+        DEPRECATED. No longer in use, will be removed in the future.
+
         This method splits a word into its constituent syllables (as best it can).
         """
         start = 0
@@ -94,6 +96,9 @@ class SyllableCounter:
         return syllables
 
     def remove_punctuation(self, str):
+        """
+        Strips punctuation from the string.
+        """
         return re.sub(r'[\.\?!,/]+', "", str)
 
     def split_sentence(self, sentence, syllable_count):

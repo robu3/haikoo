@@ -1,6 +1,6 @@
-# haikoo
+# haikoo 🖋
 
-Haikoo is a fun little haiku generator. It uses [Azure Congnitive Services](https://azure.microsoft.com/en-us/services/cognitive-services/computer-vision/), Markov chains (leveraging [Markovify](https://github.com/jsvine/markovify)), and word syllable counts to create haiku from an image.
+Haikoo is a fun little haiku generator. It uses [Azure Congnitive Services](https://azure.microsoft.com/en-us/services/cognitive-services/computer-vision/), Markov chains (leveraging [Markovify](https://github.com/jsvine/markovify)), and word syllable counts to create haiku from an image. The text is then overlaid on a cropped version of the original picture to create a consolidated image ready for social media.
 
 Given an image like this:
 
@@ -34,10 +34,12 @@ From the terminal:
 python app.py /path/to/image.png
 ```
 
+When using the terminal application, you will need to copy config.json.default to config.json and update the file with your Azure CV key and region before beginning.
+Let the programmatically generated poetry begin!
+
 # Technical Details
 
-Haikoo extends/subclasses a couple of Markovify's classes in order to create Markov chain models that also consider syllables in word selection, i.e., HaikuChain and HaikuText.
-HaikuChain counts the number of syllables in a word when tokenizing text; the result can be serialized for reuse later, negating the need to count syllables at runtime (a performance win).
+Haikoo extends/subclasses a couple of Markovify's classes in order to create Markov chain models that also take syllable count into consideration when selecting words, i.e., `HaikuChain` and `HaikuText`. `HaikuChain` counts the number of syllables in a word when tokenizing text; the result can be serialized for reuse later, negating the need to count syllables at runtime (a performance win).
 
 # Advanced Usage
 
